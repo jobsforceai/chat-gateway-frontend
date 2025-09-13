@@ -24,3 +24,270 @@ body {
   background: black;
 }
 
+/* === Chat Theme (dark, glassy, blue→purple) === */
+.chat-theme {
+  /* Base palette via CSS variables for easy tweaking */
+  --bg: #0b1020;
+  --panel: rgba(18, 22, 39, 0.72);
+  --panel-ring: rgba(92, 105, 149, 0.42);
+  --chip: rgba(22, 27, 46, 0.82);
+  --muted: #9aa3b2;
+  --text: #e8ecf6;
+  --text-dim: #bdc4d1;
+
+  --brand-1: #5b8cff; /* blue */
+  --brand-2: #8b5cf6; /* purple */
+  --brand-1-soft: rgba(91, 140, 255, 0.2);
+  --brand-2-soft: rgba(139, 92, 246, 0.22);
+
+  --bubble: rgba(20, 25, 46, 0.82);
+  --bubble-self: linear-gradient(135deg, #2a5bff, #6a48ff);
+  --bubble-ring: rgba(97, 118, 173, 0.3);
+
+  --btn: linear-gradient(135deg, #4f79ff, #6c50ff);
+  --btn-hover: linear-gradient(135deg, #3f68f2, #5a41f2);
+
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --shadow-1: 0 8px 30px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 10px 40px rgba(0, 0, 0, 0.45);
+
+  background: radial-gradient(
+      1200px 600px at 100% -20%,
+      var(--brand-1-soft),
+      transparent
+    ),
+    radial-gradient(900px 500px at 0% 120%, var(--brand-2-soft), transparent),
+    var(--bg);
+  color: var(--text);
+}
+
+/* Panels (header, body, composer) */
+.chat-theme .glass-panel {
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-2);
+  outline: 1px solid var(--panel-ring);
+}
+
+/* Header chips: participants + timer */
+.chat-theme .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--text);
+  outline: 1px solid var(--panel-ring);
+  font-size: 13px;
+}
+
+/* Bubbles */
+.chat-theme .bubble {
+  max-width: 78%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  outline: 1px solid var(--bubble-ring);
+  background: var(--bubble);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.chat-theme .bubble--self {
+  background: var(--bubble-self);
+  color: #fff;
+  outline: 1px solid rgba(117, 153, 255, 0.35);
+}
+
+.chat-theme .bubble .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+}
+
+.chat-theme .bubble--self .meta {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Composer */
+.chat-theme .composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-2xl);
+  outline: 1px solid var(--panel-ring);
+  padding: 8px;
+  box-shadow: var(--shadow-1);
+}
+
+.chat-theme .composer .icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(24, 29, 51, 0.7);
+  outline: 1px solid var(--panel-ring);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  transition: transform 0.15s ease, background 0.15s ease,
+    outline-color 0.15s ease;
+}
+
+.chat-theme .composer .icon-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(28, 35, 61, 0.85);
+  outline-color: rgba(118, 131, 175, 0.6);
+}
+
+.chat-theme .composer input[type="text"] {
+  height: 48px;
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
+}
+
+.chat-theme .composer input::placeholder {
+  color: #7b8496;
+}
+
+.chat-theme .composer .send-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: #fff;
+  background: var(--btn);
+  outline: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: filter 0.2s ease, transform 0.1s ease, background 0.2s ease;
+}
+
+.chat-theme .composer .send-btn:hover {
+  background: var(--btn-hover);
+  filter: saturate(1.05);
+  transform: translateY(-1px);
+}
+
+.chat-theme .composer .send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Scroll area */
+.chat-theme .scroll-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 136, 179, 0.55) transparent;
+}
+
+.chat-theme .scroll-body::-webkit-scrollbar {
+  width: 10px;
+}
+.chat-theme .scroll-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-theme .scroll-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(91, 140, 255, 0.55),
+    rgba(139, 92, 246, 0.55)
+  );
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+/* Utility helpers to map to your JSX quickly */
+.chat-theme .header {
+  padding: 16px;
+}
+.chat-theme .title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+.chat-theme .subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Small fade-in for new bubbles (optional) */
+@keyframes bubbleIn {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.chat-theme .bubble {
+  animation: bubbleIn 0.18s ease both;
+}
+
+/* Light mode fallback (optional) */
+@media (prefers-color-scheme: light) {
+  .chat-theme {
+    --bg: #f7f9ff;
+    --panel: rgba(255, 255, 255, 0.75);
+    --panel-ring: rgba(54, 74, 151, 0.12);
+    --chip: rgba(240, 243, 255, 0.9);
+    --muted: #55607a;
+    --text: #1d2437;
+    --text-dim: #3c4662;
+    --bubble: rgba(248, 250, 255, 0.95);
+    --bubble-ring: rgba(40, 70, 180, 0.12);
+  }
+}
+
+/* ==== Custom Scrollbar Theme ==== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* keep glassy */
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(91, 140, 255, 0.7),
+    rgba(139, 92, 246, 0.7)
+  );
+  border-radius: 999px;
+  border: 3px solid transparent; /* adds "padding" */
+  background-clip: content-box;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(91, 140, 255, 0.9),
+    rgba(139, 92, 246, 0.9)
+  );
+}
+
+/* Firefox support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 140, 255, 0.7) transparent;
+}
