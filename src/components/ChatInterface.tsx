@@ -20,13 +20,13 @@ import {
   X,
 } from "lucide-react";
 
-type MessageKind = "text" | "code" | "image";
+type MessageType = "text" | "code" | "image";
 
 interface Message {
-  sender: string;
-  message: string;
+  from: { name: string };
+  content: string;
   timestamp?: number;
-  kind?: MessageKind;
+  type?: MessageType;
   // For images
   imageUrl?: string;
   imageName?: string;
@@ -68,7 +68,7 @@ const Bubble = ({ isSelf, msg }: { isSelf: boolean; msg: Message }) => {
               isSelf ? "text-white/80" : "text-slate-300/90",
             ].join(" ")}
           >
-            {msg.sender}
+            {msg.from.name}
           </span>
           <span
             className={[
@@ -78,12 +78,12 @@ const Bubble = ({ isSelf, msg }: { isSelf: boolean; msg: Message }) => {
           >
             {time}
           </span>
-          {msg.kind === "code" && (
+          {msg.type === "code" && (
             <span className="rounded bg-black/20 px-1.5 py-0.5 text-[10px]">
               code
             </span>
           )}
-          {msg.kind === "image" && (
+          {msg.type === "image" && (
             <span className="rounded bg-black/20 px-1.5 py-0.5 text-[10px]">
               image
             </span>
@@ -94,7 +94,7 @@ const Bubble = ({ isSelf, msg }: { isSelf: boolean; msg: Message }) => {
     </div>
   );
 
-  if (msg.kind === "image" && msg.imageUrl) {
+  if (msg.type === "image" && msg.imageUrl) {
     return wrap(
       <div className="space-y-2">
         <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
@@ -105,22 +105,22 @@ const Bubble = ({ isSelf, msg }: { isSelf: boolean; msg: Message }) => {
             className="max-h-[320px] w-full object-contain"
           />
         </div>
-        {msg.message ? <p className="text-sm">{msg.message}</p> : null}
+        {msg.content ? <p className="text-sm">{msg.content}</p> : null}
       </div>
     );
   }
 
-  if (msg.kind === "code") {
+  if (msg.type === "code") {
     return wrap(
       <pre className="max-w-full overflow-x-auto rounded-lg bg-black/30 p-3 text-xs leading-relaxed">
-        <code className="font-mono">{msg.message}</code>
+        <code className="font-mono">{msg.content}</code>
       </pre>
     );
   }
 
   // default text
   return wrap(
-    <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.message}</p>
+    <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
   );
 };
 
@@ -148,7 +148,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [connecting, setConnecting] = useState(true);
 
   // Composer state
-  const [composeMode, setComposeMode] = useState<MessageKind>("text"); // 'text' | 'code'
+  const [composeMode, setComposeMode] = useState<MessageType>("text"); // 'text' | 'code'
   const [textValue, setTextValue] = useState("");
   const [showAttachMenu, setShowAttachMenu] = useState(false);
 
@@ -165,11 +165,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setConnecting(true);
     socketService.connect(token);
 
-    socketService.onMessageReceived((message: Message) => {
+    socketService.onMessageReceived((message) => {
       const withTs: Message = {
         ...message,
-        timestamp: message.timestamp ?? Date.now(),
-        kind: message.kind ?? "text",
+        timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, withTs]);
     });
@@ -181,6 +180,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setConnecting(false);
       }
     );
+
+    socketService.onError((error) => {
+      alert(`Error: ${error.message}`);
+    });
 
     return () => socketService.disconnect();
   }, [token]);
@@ -220,18 +223,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (!value) return;
 
     const optimistic: Message = {
-      sender: displayName,
-      message: value,
+      from: { name: displayName },
+      content: value,
       timestamp: Date.now(),
-      kind: composeMode,
+      type: composeMode,
     };
     setMessages((prev) => [...prev, optimistic]);
 
     // Send via socket (simple API). If your backend supports rich kinds, send `kind` too.
     try {
-      socketService.sendMessage(
-        composeMode === "code" ? "```" + value + "```" : value
-      );
+      if (composeMode === "text" || composeMode === "code") {
+        socketService.sendMessage({
+          type: composeMode,
+          content: value,
+        });
+      }
     } catch {
       // ignore
     }
@@ -277,10 +283,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     // Optimistic local image bubble
     const optimistic: Message = {
-      sender: displayName,
-      message: "", // optional caption if you want
+      from: { name: displayName },
+      content: "", // optional caption if you want
       timestamp: Date.now(),
-      kind: "image",
+      type: "image",
       imageUrl: url,
       imageName: file.name,
     };
@@ -288,7 +294,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     // If your backend supports uploads, handle it here; for now we just send a marker
     try {
-      socketService.sendMessage(`[image:${file.name}]`);
+      socketService.sendMessage({
+        type: "image",
+        imageUrl: url,
+        imageName: file.name,
+        content: textValue,
+      });
     } catch {
       // ignore
     }
@@ -342,7 +353,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               {messages.map((msg, idx) => (
                 <Bubble
                   key={idx}
-                  isSelf={msg.sender === displayName}
+                  isSelf={msg.from.name === displayName}
                   msg={msg}
                 />
               ))}
