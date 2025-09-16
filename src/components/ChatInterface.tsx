@@ -30,6 +30,7 @@ interface Message {
   // For images
   imageUrl?: string;
   imageName?: string;
+  imageData?: ArrayBuffer;
 }
 
 interface ChatInterfaceProps {
@@ -170,6 +171,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         ...message,
         timestamp: Date.now(),
       };
+      if (withTs.type === "image" && withTs.imageData) {
+        const blob = new Blob([withTs.imageData], { type: "image/jpeg" });
+        withTs.imageUrl = URL.createObjectURL(blob);
+      }
       setMessages((prev) => [...prev, withTs]);
     });
 
@@ -279,30 +284,40 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const url = URL.createObjectURL(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const arrayBuffer = event.target?.result as ArrayBuffer;
+      if (!arrayBuffer) return;
 
-    // Optimistic local image bubble
-    const optimistic: Message = {
-      from: { name: displayName },
-      content: "", // optional caption if you want
-      timestamp: Date.now(),
-      type: "image",
-      imageUrl: url,
-      imageName: file.name,
-    };
-    setMessages((prev) => [...prev, optimistic]);
+      const url = URL.createObjectURL(new Blob([arrayBuffer]));
 
-    // If your backend supports uploads, handle it here; for now we just send a marker
-    try {
-      socketService.sendMessage({
+      // Optimistic local image bubble
+      const optimistic: Message = {
+        from: { name: displayName },
+        content: "", // optional caption if you want
+        timestamp: Date.now(),
         type: "image",
         imageUrl: url,
         imageName: file.name,
-        content: textValue,
-      });
-    } catch {
-      // ignore
-    }
+      };
+      setMessages((prev) => [...prev, optimistic]);
+
+      // If your backend supports uploads, handle it here
+      try {
+        const meta = { name: file.name, type: file.type, size: file.size };
+        socketService.sendImage(meta, arrayBuffer, (res) => {
+          if (!res.ok) {
+            console.error("Image upload failed:", res.error);
+            // TODO: show an error to the user
+          }
+        });
+      } catch (e) {
+        console.error("Failed to send image:", e);
+        // ignore
+      }
+    };
+
+    reader.readAsArrayBuffer(file);
 
     // reset input so same file can be re-picked later
     e.target.value = "";

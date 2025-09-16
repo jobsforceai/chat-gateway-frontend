@@ -8,6 +8,7 @@ interface ServerToClientEvents {
     content: string;
     imageUrl?: string;
     imageName?: string;
+    imageData?: ArrayBuffer;
   }) => void;
   presenceUpdate: (payload: {
     participantCount: number;
@@ -20,11 +21,14 @@ interface ServerToClientEvents {
 interface ClientToServerEvents {
   join: () => void;
   sendMessage: (payload: {
-    type: "text" | "code" | "image";
+    type: "text" | "code";
     content: string;
-    imageUrl?: string;
-    imageName?: string;
   }) => void;
+  sendImage: (
+    meta: { name: string; type: string; size: number },
+    imageData: ArrayBuffer,
+    ack?: (response: { ok: boolean; error?: string }) => void
+  ) => void;
 }
 
 class SocketService {
@@ -63,12 +67,18 @@ class SocketService {
   }
 
   sendMessage(payload: {
-    type: "text" | "code" | "image";
+    type: "text" | "code";
     content: string;
-    imageUrl?: string;
-    imageName?: string;
   }) {
     this.socket?.emit("sendMessage", payload);
+  }
+
+  sendImage(
+    meta: { name: string; type: string; size: number },
+    imageData: ArrayBuffer,
+    callback: (response: { ok: boolean; error?: string }) => void
+  ) {
+    this.socket?.emit("sendImage", meta, imageData, callback);
   }
 
   // Subscribe to incoming messages
@@ -79,6 +89,7 @@ class SocketService {
       content: string;
       imageUrl?: string;
       imageName?: string;
+      imageData?: ArrayBuffer;
     }) => void
   ) {
     this.socket?.on("newMessage", callback);
