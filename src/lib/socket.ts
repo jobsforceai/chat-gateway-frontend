@@ -39,7 +39,7 @@ class SocketService {
     if (this.socket) return;
 
     const gatewayUrl =
-      process.env.NEXT_PUBLIC_CHAT_GATEWAY_URL || "ws://localhost:8081";
+      process.env.NEXT_PUBLIC_CHAT_GATEWAY_URL || "wss://chatapi.jobsforce.ai";
 
     this.socket = io(gatewayUrl, {
       path: "/ws", // Specify the custom path for the WebSocket server

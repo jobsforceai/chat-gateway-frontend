@@ -1,6 +1,6 @@
 "use server";
 
-const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:8080/api/v1";
+const API_BASE_URL = process.env.API_BASE_URL || "https://devapi.jobsforce.ai/api/v1";
 
 /**
  * Fetches a guest token from the backend to join a Bolt session.
