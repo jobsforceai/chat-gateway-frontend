@@ -10,7 +10,6 @@ import {
 } from "react";
 import { socketService } from "@/lib/socket";
 import {
-  Paperclip,
   Send,
   Users,
   Clock,
@@ -18,6 +17,8 @@ import {
   Code,
   Image as ImageIcon,
   X,
+  Download,
+  LogOut,
 } from "lucide-react";
 
 type MessageType = "text" | "code" | "image";
@@ -30,12 +31,13 @@ interface Message {
   // For images
   imageUrl?: string;
   imageName?: string;
-  imageData?: ArrayBuffer;
+  imageData?: ArrayBuffer | string;
 }
 
 interface ChatInterfaceProps {
   token: string;
   displayName: string;
+  sessionId: string;
 }
 
 const formatTime = (totalSeconds: number): string => {
@@ -46,7 +48,15 @@ const formatTime = (totalSeconds: number): string => {
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 };
 
-const Bubble = ({ isSelf, msg }: { isSelf: boolean; msg: Message }) => {
+const Bubble = ({
+  isSelf,
+  msg,
+  onImageClick,
+}: {
+  isSelf: boolean;
+  msg: Message;
+  onImageClick: (url: string) => void;
+}) => {
   const time = useMemo(() => {
     const d = new Date(msg.timestamp ?? Date.now());
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -98,13 +108,26 @@ const Bubble = ({ isSelf, msg }: { isSelf: boolean; msg: Message }) => {
   if (msg.type === "image" && msg.imageUrl) {
     return wrap(
       <div className="space-y-2">
-        <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={msg.imageUrl}
-            alt={msg.imageName ?? "uploaded image"}
-            className="max-h-[320px] w-full object-contain"
-          />
+        <div className="group relative">
+          <div
+            onClick={() => onImageClick(msg.imageUrl!)}
+            className="block cursor-pointer overflow-hidden rounded-xl ring-1 ring-white/10"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={msg.imageUrl}
+              alt={msg.imageName ?? "uploaded image"}
+              className="max-h-[320px] w-full object-contain"
+            />
+          </div>
+          <a
+            href={msg.imageUrl}
+            download={msg.imageName ?? "image"}
+            title="Download image"
+            className="absolute bottom-2 right-2 z-10 rounded-full bg-slate-900/60 p-2 text-white opacity-0 transition-opacity group-hover:opacity-100"
+          >
+            <Download className="h-4 w-4" />
+          </a>
         </div>
         {msg.content ? <p className="text-sm">{msg.content}</p> : null}
       </div>
@@ -142,25 +165,92 @@ const EmptyState = () => (
 const ChatInterface: React.FC<ChatInterfaceProps> = ({
   token,
   displayName,
+  sessionId,
 }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const stored = localStorage.getItem(`chat-session-${sessionId}`);
+      if (stored) {
+        const { timestamp, messages: storedMessages } = JSON.parse(stored);
+        const threeHours = 3 * 60 * 60 * 1000;
+        if (Date.now() - timestamp < threeHours) {
+          return storedMessages.map((msg: Message) => {
+            if (msg.type === "image" && typeof msg.imageData === "string") {
+              return {
+                ...msg,
+                imageUrl: `data:image/jpeg;base64,${msg.imageData}`,
+              };
+            }
+            return msg;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load messages from localStorage", error);
+    }
+    return [];
+  });
   const [participants, setParticipants] = useState(0);
   const [ttlSeconds, setTtlSeconds] = useState<number | null>(null);
   const [connecting, setConnecting] = useState(true);
+  const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(
+    null
+  );
+  const [showExitModal, setShowExitModal] = useState(false);
 
   // Composer state
   const [composeMode, setComposeMode] = useState<MessageType>("text"); // 'text' | 'code'
   const [textValue, setTextValue] = useState("");
-  const [showAttachMenu, setShowAttachMenu] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const attachBtnRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const timeRemaining = useMemo(
     () => (ttlSeconds !== null ? formatTime(Math.max(0, ttlSeconds)) : "—"),
     [ttlSeconds]
   );
+
+  // Helper to convert ArrayBuffer to Base64
+  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  };
+
+  useEffect(() => {
+    try {
+      const messagesToStore = messages.map((msg) => {
+        if (msg.type === "image" && msg.imageData instanceof ArrayBuffer) {
+          return {
+            ...msg,
+            imageData: arrayBufferToBase64(msg.imageData),
+            imageUrl: undefined, // Don't store blob URLs
+          };
+        }
+        return msg;
+      });
+
+      const data = {
+        timestamp: Date.now(),
+        messages: messagesToStore,
+      };
+      localStorage.setItem(`chat-session-${sessionId}`, JSON.stringify(data));
+    } catch (error) {
+      console.error("Failed to save messages to localStorage", error);
+    }
+  }, [messages, sessionId]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [textValue]);
 
   useEffect(() => {
     setConnecting(true);
@@ -204,23 +294,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }, 1000);
     return () => clearInterval(id);
   }, [ttlSeconds]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      if (!showAttachMenu) return;
-      const target = e.target as Node;
-      if (
-        attachBtnRef.current &&
-        !attachBtnRef.current.contains(target) &&
-        !(document.getElementById("attach-menu")?.contains(target) ?? false)
-      ) {
-        setShowAttachMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [showAttachMenu]);
 
   const handleSend = (e: FormEvent) => {
     e.preventDefault();
@@ -276,7 +349,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const openImagePicker = () => {
-    setShowAttachMenu(false);
     fileInputRef.current?.click();
   };
 
@@ -323,6 +395,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     e.target.value = "";
   };
 
+  const handleExit = () => {
+    try {
+      localStorage.removeItem(`chat-session-${sessionId}`);
+      localStorage.removeItem(`chat-display-name-${sessionId}`);
+    } catch (e) {
+      console.error("Failed to clear session data", e);
+    }
+    window.location.reload();
+  };
+
   return (
     <div className="chat-theme flex h-screen w-full items-stretch justify-center">
       <div className="mx-auto flex w-full max-w-5xl flex-col px-3 py-4 sm:px-6">
@@ -349,6 +431,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <Clock className="h-4 w-4" />
                 <span className="tabular-nums">{timeRemaining}</span>
               </div>
+              <button
+                onClick={() => setShowExitModal(true)}
+                className="chip hover:bg-red-500/20 hover:text-red-400 hover:ring-red-500/40"
+                title="Exit session"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </header>
@@ -370,6 +459,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   key={idx}
                   isSelf={msg.from.name === displayName}
                   msg={msg}
+                  onImageClick={setExpandedImageUrl}
                 />
               ))}
               <div ref={bottomRef} />
@@ -381,7 +471,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <footer className="mt-3">
           <form
             onSubmit={handleSend}
-            className="composer group relative flex items-center gap-2 rounded-2xl bg-slate-900/80 p-2 ring-1 ring-slate-700/60 backdrop-blur-lg"
+            className={`composer group relative flex items-center gap-2 rounded-2xl p-2 ring-1 backdrop-blur-lg transition-colors ${
+              composeMode === "code"
+                ? "bg-emerald-950/80 ring-emerald-500/60"
+                : "bg-slate-900/80 ring-slate-700/60"
+            }`}
             aria-label="Send a message"
           >
             {/* Hidden file input */}
@@ -394,48 +488,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             />
 
             {/* Attach (paperclip) with dropdown */}
-            <div className="relative">
-              <button
-                ref={attachBtnRef}
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={showAttachMenu}
-                aria-label="Attach"
-                title="Attach"
-                onClick={() => setShowAttachMenu((s) => !s)}
-                className="icon-btn"
-              >
-                <Paperclip className="h-5 w-5" />
-              </button>
-
-              {showAttachMenu && (
-                <div
-                  id="attach-menu"
-                  role="menu"
-                  className="absolute left-0 -top-20 z-20 mt-2 w-44 overflow-hidden rounded-xl bg-slate-900/95 p-1 text-sm shadow-2xl ring-1 ring-slate-700/60 backdrop-blur"
-                >
-                  <button
-                    role="menuitem"
-                    onClick={openImagePicker}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70"
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                    Upload image
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      setComposeMode("code");
-                      setShowAttachMenu(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800/70"
-                  >
-                    <Code className="h-4 w-4" />
-                    Insert code
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              aria-label="Upload image"
+              title="Upload image"
+              onClick={openImagePicker}
+              className="icon-btn"
+            >
+              <ImageIcon className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Insert code"
+              title="Insert code"
+              onClick={() => setComposeMode("code")}
+              className={`icon-btn ${
+                composeMode === "code"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : ""
+              }`}
+            >
+              <Code className="h-5 w-5" />
+            </button>
 
             {/* Composer input */}
             <div className="relative flex-1">
@@ -446,26 +520,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </div>
               )}
 
-              {composeMode === "code" ? (
-                <textarea
-                  value={textValue}
-                  onChange={(e) => setTextValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Write code… (Enter to send, Shift+Enter for newline)"
-                  rows={3}
-                  className="h-12 max-h-40 w-full resize-y rounded-xl bg-transparent px-3 pt-5 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none"
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={textValue}
-                  onChange={(e) => setTextValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type a message…"
-                  className="h-12 w-full rounded-xl bg-transparent px-3 text-slate-200 placeholder:text-slate-500 focus:outline-none"
-                  autoComplete="off"
-                />
-              )}
+              <textarea
+                ref={textareaRef}
+                value={textValue}
+                onChange={(e) => setTextValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  composeMode === "code"
+                    ? "Write code… (Enter to send, Shift+Enter for newline)"
+                    : "Type a message…"
+                }
+                rows={1}
+                className={`max-h-40 w-full resize-y rounded-xl px-3 text-slate-200 placeholder:text-slate-500 focus:outline-none ${
+                  composeMode === "code"
+                    ? "min-h-[80px] bg-slate-950/70 pt-5 font-mono"
+                    : "h-12 bg-transparent pt-3"
+                }`}
+              />
             </div>
 
             {/* Clear code mode chip */}
@@ -522,6 +593,57 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </p>
           </div>
         </footer>
+
+        {/* Image Modal */}
+        {expandedImageUrl && (
+          <div
+            className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-black/80 backdrop-blur-lg"
+            onClick={() => setExpandedImageUrl(null)}
+          >
+            <div className="relative max-h-[90vh] max-w-[90vw]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={expandedImageUrl}
+                alt="Expanded view"
+                className="h-full w-full object-contain"
+              />
+              <button
+                onClick={() => setExpandedImageUrl(null)}
+                className="absolute -top-4 -right-4 z-10 rounded-full bg-slate-800 p-1 text-white"
+                aria-label="Close image view"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Exit Confirmation Modal */}
+        {showExitModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-lg">
+            <div className="glass-panel max-w-sm rounded-2xl p-6 text-center">
+              <h3 className="text-lg font-bold text-white">Exit Session?</h3>
+              <p className="mt-2 text-sm text-slate-300">
+                All chat history for this session will be permanently deleted
+                from this device. This action cannot be undone.
+              </p>
+              <div className="mt-6 flex justify-center gap-4">
+                <button
+                  onClick={() => setShowExitModal(false)}
+                  className="rounded-lg bg-slate-700/60 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExit}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                >
+                  Exit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

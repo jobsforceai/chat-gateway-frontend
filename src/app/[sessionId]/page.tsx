@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { getGuestToken } from "@/app/actions/boltActions";
 import ChatInterface from "@/components/ChatInterface";
@@ -27,45 +27,93 @@ export default function ParticipantPage() {
   const params = useParams();
   const rawSessionId = params.sessionId as string;
   // Extract only the session code from the parameter, in case a full URL was somehow passed.
-  const sessionId = rawSessionId ? rawSessionId.substring(rawSessionId.lastIndexOf('/') + 1) : "";
+  const sessionId = rawSessionId
+    ? rawSessionId.substring(rawSessionId.lastIndexOf("/") + 1)
+    : "";
 
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // This function is called when the user submits their name
-  const handleJoin = async (name: string) => {
+  const handleJoin = useCallback(
+    async (name: string) => {
+      if (!sessionId) {
+        setError("No Session ID found in the URL.");
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      // Call the new 'getGuestToken' server action with both parameters
+      const result = await getGuestToken(sessionId, name);
+
+      if (result.success && result.data?.guestToken) {
+        // If successful, store both the token and the name
+        setGuestToken(result.data.guestToken);
+        setDisplayName(name);
+        try {
+          localStorage.setItem(`chat-display-name-${sessionId}`, name);
+        } catch (e) {
+          console.error("Failed to save display name", e);
+        }
+      } else {
+        // If it fails, store the error message from the backend
+        setError(result.message || "Could not join the session.");
+        try {
+          localStorage.removeItem(`chat-display-name-${sessionId}`);
+        } catch (e) {
+          console.error("Failed to remove display name", e);
+        }
+      }
+
+      setIsLoading(false);
+    },
+    [sessionId]
+  );
+
+  useEffect(() => {
     if (!sessionId) {
-      setError("No Session ID found in the URL.");
+      setIsInitializing(false);
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
-
-    // Call the new 'getGuestToken' server action with both parameters
-    const result = await getGuestToken(sessionId, name);
-
-    if (result.success && result.data?.guestToken) {
-      // If successful, store both the token and the name
-      setGuestToken(result.data.guestToken);
-      setDisplayName(name);
-    } else {
-      // If it fails, store the error message from the backend
-      setError(result.message || "Could not join the session.");
+    let savedDisplayName: string | null = null;
+    try {
+      savedDisplayName = localStorage.getItem(`chat-display-name-${sessionId}`);
+    } catch (e) {
+      console.error("Failed to read display name from localStorage", e);
     }
 
-    setIsLoading(false);
-  };
+    if (savedDisplayName) {
+      handleJoin(savedDisplayName).finally(() => {
+        setIsInitializing(false);
+      });
+    } else {
+      setIsInitializing(false);
+    }
+  }, [sessionId, handleJoin]);
 
   if (error) {
     return <ErrorComponent message={error} />;
   }
 
+  if (isInitializing) {
+    return <LoadingComponent />;
+  }
+
   // If we have a token and a display name, the user is in the chat
   if (guestToken && displayName) {
-    return <ChatInterface token={guestToken} displayName={displayName} />;
+    return (
+      <ChatInterface
+        token={guestToken}
+        displayName={displayName}
+        sessionId={sessionId}
+      />
+    );
   }
 
   // If we don't have a token yet, show the form to enter a display name
